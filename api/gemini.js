@@ -1,108 +1,68 @@
-export const config = { runtime: 'edge' };
+// Standard Node.js serverless function (more reliable than Edge on free tier)
 
-const MODELS_FALLBACK = [
+const MODELS = [
   'gemini-2.5-flash',
   'gemini-2.5-flash-lite',
   'gemini-2.5-pro',
 ];
 
-export default async function handler(req) {
-  // Only allow POST
-  if (req.method !== 'POST') {
-    return new Response(JSON.stringify({ error: 'Method not allowed' }), {
-      status: 405,
-      headers: { 'Content-Type': 'application/json' },
-    });
-  }
+export default async function handler(req, res) {
+
+  // CORS headers so browser can call this
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+  if (req.method === 'OPTIONS') return res.status(200).end();
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   const API_KEY = process.env.GEMINI_API_KEY;
   if (!API_KEY) {
-    return new Response(JSON.stringify({ error: 'API key not configured on server.' }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' },
-    });
+    return res.status(500).json({ error: 'GEMINI_API_KEY not set in Vercel environment variables.' });
   }
 
-  const { searchParams } = new URL(req.url);
-  const requestedModel  = searchParams.get('model') || 'gemini-2.5-flash';
-  const useStream       = searchParams.get('stream') !== 'false';
+  const { prompt, model: requestedModel } = req.body || {};
 
-  const body = await req.json();
-  const { prompt } = body;
+  if (!prompt) return res.status(400).json({ error: 'No prompt provided.' });
 
-  if (!prompt) {
-    return new Response(JSON.stringify({ error: 'No prompt provided.' }), {
-      status: 400,
-      headers: { 'Content-Type': 'application/json' },
-    });
-  }
+  // Deduplicated model list
+  const models = [requestedModel, ...MODELS].filter((v, i, a) => v && a.indexOf(v) === i);
 
+  const BASE = 'https://generativelanguage.googleapis.com/v1beta/models';
   const geminiBody = JSON.stringify({
     contents: [{ parts: [{ text: prompt }] }],
     generationConfig: { maxOutputTokens: 4096, temperature: 0.7 },
   });
 
-  // Build deduplicated model list starting with the requested one
-  const models = [requestedModel, ...MODELS_FALLBACK].filter(
-    (v, i, a) => a.indexOf(v) === i
-  );
+  let lastError = '';
 
   for (const model of models) {
     try {
-      const BASE = 'https://generativelanguage.googleapis.com/v1beta/models';
+      const apiRes = await fetch(
+        `${BASE}/${model}:generateContent?key=${API_KEY}`,
+        { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: geminiBody }
+      );
 
-      if (useStream) {
-        const res = await fetch(
-          `${BASE}/${model}:streamGenerateContent?alt=sse&key=${API_KEY}`,
-          { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: geminiBody }
-        );
-        if (!res.ok) {
-          const err = await res.json().catch(() => ({}));
-          // quota / not-found → try next model
-          if (res.status === 429 || res.status === 404 || res.status === 400) continue;
-          throw new Error(err?.error?.message || `HTTP ${res.status}`);
-        }
-        // Stream the SSE straight back to the browser
-        return new Response(res.body, {
-          status: 200,
-          headers: {
-            'Content-Type': 'text/event-stream',
-            'Cache-Control': 'no-cache',
-            'X-Model-Used': model,
-          },
-        });
-      } else {
-        const res = await fetch(
-          `${BASE}/${model}:generateContent?key=${API_KEY}`,
-          { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: geminiBody }
-        );
-        if (!res.ok) {
-          const err = await res.json().catch(() => ({}));
-          if (res.status === 429 || res.status === 404 || res.status === 400) continue;
-          throw new Error(err?.error?.message || `HTTP ${res.status}`);
-        }
-        const data = await res.json();
-        return new Response(JSON.stringify(data), {
-          status: 200,
-          headers: {
-            'Content-Type': 'application/json',
-            'X-Model-Used': model,
-          },
-        });
+      const data = await apiRes.json();
+
+      if (!apiRes.ok) {
+        lastError = data?.error?.message || `HTTP ${apiRes.status}`;
+        // quota/not-found → try next model
+        if (apiRes.status === 429 || apiRes.status === 404 || apiRes.status === 400) continue;
+        // other error → stop
+        return res.status(apiRes.status).json({ error: lastError });
       }
+
+      const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+      if (!text) { lastError = 'Empty response from model'; continue; }
+
+      return res.status(200).json({ text, model });
+
     } catch (e) {
-      // last model - propagate error
-      if (model === models[models.length - 1]) {
-        return new Response(JSON.stringify({ error: e.message }), {
-          status: 500,
-          headers: { 'Content-Type': 'application/json' },
-        });
-      }
+      lastError = e.message;
+      continue;
     }
   }
 
-  return new Response(JSON.stringify({ error: 'All models exhausted.' }), {
-    status: 500,
-    headers: { 'Content-Type': 'application/json' },
-  });
+  return res.status(500).json({ error: `All models failed. Last error: ${lastError}` });
 }
