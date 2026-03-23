@@ -1,0 +1,11 @@
+{
+  "version": 2,
+  "builds": [
+    { "src": "api/gemini.js", "use": "@vercel/edge" },
+    { "src": "public/**",     "use": "@vercel/static" }
+  ],
+  "routes": [
+    { "src": "/api/gemini",   "dest": "/api/gemini.js" },
+    { "src": "/(.*)",         "dest": "/public/$1" }
+  ]
+}

@@ -1,0 +1,654 @@
+/* ═══════════════════════════════════════
+   CURSOR
+═══════════════════════════════════════ */
+const cur = document.getElementById('cursor');
+document.addEventListener('mousemove', e => {
+  cur.style.left = e.clientX + 'px';
+  cur.style.top  = e.clientY + 'px';
+});
+function attachCursorHovers() {
+  document.querySelectorAll('a,button,input,textarea,select,.chip,.sk,.theme-card,.tech-tag,.sec-check,.choice-card').forEach(el => {
+    if (el._cursorBound) return;
+    el._cursorBound = true;
+    el.addEventListener('mouseenter', () => {
+      cur.style.width = '42px'; cur.style.height = '42px';
+      cur.style.background = 'rgba(255,107,157,.12)';
+    });
+    el.addEventListener('mouseleave', () => {
+      cur.style.width = '18px'; cur.style.height = '18px';
+      cur.style.background = 'rgba(255,107,157,.15)';
+    });
+  });
+}
+attachCursorHovers();
+
+/* ═══════════════════════════════════════
+   SCREEN NAVIGATION
+═══════════════════════════════════════ */
+let currentScreen = 'landing';
+
+function goTo(screen) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById('screen-' + screen).classList.add('active');
+
+  document.getElementById('back-btn').style.display = 'flex';
+  document.getElementById('nav-badge').style.display = 'none';
+  document.getElementById('mode-tag-profile').style.display = screen === 'profile' ? 'block' : 'none';
+  document.getElementById('mode-tag-project').style.display = screen === 'project' ? 'block' : 'none';
+
+  document.body.className = 'mode-' + screen;
+  currentScreen = screen;
+
+  // Adjust cursor tint for project
+  cur.style.borderColor = screen === 'project' ? 'var(--green)' : 'var(--pink)';
+
+  window.scrollTo(0, 0);
+  attachCursorHovers();
+}
+
+function goBack() {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById('screen-landing').classList.add('active');
+  document.getElementById('back-btn').style.display = 'none';
+  document.getElementById('nav-badge').style.display = 'block';
+  document.getElementById('mode-tag-profile').style.display = 'none';
+  document.getElementById('mode-tag-project').style.display = 'none';
+  document.body.className = 'mode-landing';
+  cur.style.borderColor = 'var(--yellow)';
+  currentScreen = 'landing';
+  window.scrollTo(0, 0);
+}
+
+/* ═══════════════════════════════════════
+   TOAST
+═══════════════════════════════════════ */
+function showToast(msg, type = 'ok') {
+  const t = document.getElementById('toast');
+  const icon = t.querySelector('i');
+  document.getElementById('toast-txt').textContent = ' ' + msg;
+  icon.className = type === 'err' ? 'ri-error-warning-line' : 'ri-checkbox-circle-line';
+  t.className = `toast show ${type}`;
+  setTimeout(() => t.classList.remove('show'), 2800);
+}
+
+/* ═══════════════════════════════════════
+   ████  PROFILE GENERATOR JS  ████
+═══════════════════════════════════════ */
+
+/* Step tabs */
+document.getElementById('steps').addEventListener('click', e => {
+  const btn = e.target.closest('.step');
+  if (!btn) return;
+  document.querySelectorAll('.step').forEach(b => b.classList.remove('on'));
+  document.querySelectorAll('.sec').forEach(s => s.classList.remove('on'));
+  btn.classList.add('on');
+  document.getElementById('s-' + btn.dataset.s).classList.add('on');
+  document.querySelector('.secs').scrollTop = 0;
+});
+
+/* Preview tabs */
+document.querySelectorAll('.ptab').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.ptab').forEach(b => b.classList.remove('on'));
+    document.querySelectorAll('.ppane').forEach(p => p.classList.remove('on'));
+    btn.classList.add('on');
+    document.getElementById('p-' + btn.dataset.p).classList.add('on');
+  });
+});
+
+/* Chips */
+document.querySelectorAll('.chip[data-st], .chip[data-op]').forEach(c => {
+  c.addEventListener('click', () => { c.classList.toggle('on'); sched(); });
+});
+
+/* Skills */
+document.querySelectorAll('.sk').forEach(s => {
+  s.addEventListener('click', () => { s.classList.toggle('on'); sched(); });
+});
+
+/* Header style cards */
+document.getElementById('header-styles').addEventListener('click', e => {
+  const card = e.target.closest('.theme-card');
+  if (!card) return;
+  document.querySelectorAll('.theme-card').forEach(c => c.classList.remove('on'));
+  card.classList.add('on');
+  sched();
+});
+
+/* Greeting select */
+document.getElementById('greeting').addEventListener('change', function() {
+  document.getElementById('custom-greet-fg').style.display = this.value === 'custom' ? 'block' : 'none';
+  sched();
+});
+
+/* Lists */
+const lists = { proj:[], cert:[] };
+function addL(type) {
+  const inp = document.getElementById(type + '-in');
+  const val = inp.value.trim();
+  if (!val) return;
+  lists[type].push(val); inp.value = '';
+  renderL(type); sched();
+}
+function removeL(type, idx) { lists[type].splice(idx,1); renderL(type); sched(); }
+function renderL(type) {
+  document.getElementById(type + '-list').innerHTML = lists[type].map((item,i) =>
+    `<div class="li"><span class="li-t">${item}</span><button class="li-del" onclick="removeL('${type}',${i})"><i class="ri-close-line"></i></button></div>`
+  ).join('');
+}
+
+/* Helpers */
+function v(id) { return (document.getElementById(id)?.value || '').trim(); }
+function activeStats() { return [...document.querySelectorAll('#stat-chips .chip.on')].map(c => c.dataset.st); }
+function activeOpts()  { return [...document.querySelectorAll('#opt-chips .chip.on')].map(c => c.dataset.op); }
+function activeSkills(g) { return [...document.querySelectorAll('#' + g + ' .sk.on')].map(s => s.dataset.k); }
+function headerStyle() { return document.querySelector('.theme-card.on')?.dataset.hs || 'simple'; }
+
+/* Skill badge */
+function skillBadge(name, style) {
+  const map = {
+    'Python':['python','3776AB','white','python'],'Java':['java','ED8B00','white','openjdk'],
+    'JavaScript':['javascript','F7DF1E','black','javascript'],'TypeScript':['typescript','3178C6','white','typescript'],
+    'C':['c','00599C','white','c'],'C++':['c%2B%2B','00599C','white','cplusplus'],
+    'HTML5':['html5','E34F26','white','html5'],'CSS3':['css3','1572B6','white','css3'],
+    'SQL':['sql','4479A1','white','mysql'],'Bash':['bash','4EAA25','white','gnubash'],
+    'R':['r','276DC3','white','r'],'Go':['go','00ADD8','white','go'],
+    'Rust':['rust','000000','white','rust'],'PHP':['php','777BB4','white','php'],
+    'Kotlin':['kotlin','7F52FF','white','kotlin'],'Swift':['swift','FA7343','white','swift'],
+    'React':['react','61DAFB','black','react'],'Vue.js':['vue.js','35495E','4FC08D','vuedotjs'],
+    'Next.js':['next.js','000000','white','nextdotjs'],'Node.js':['node.js','6DA55F','white','nodedotjs'],
+    'Express':['express','404040','white','express'],'Django':['django','092E20','white','django'],
+    'Flask':['flask','000000','white','flask'],'FastAPI':['fastapi','005571','white','fastapi'],
+    'TensorFlow':['tensorflow','FF6F00','white','tensorflow'],'PyTorch':['pytorch','EE4C2C','white','pytorch'],
+    'Pandas':['pandas','150458','white','pandas'],'NumPy':['numpy','013243','white','numpy'],
+    'Scikit-learn':['scikit--learn','F7931E','white','scikitlearn'],'Keras':['keras','D00000','white','keras'],
+    'Tailwind CSS':['tailwind%20css','38B2AC','white','tailwindcss'],'Bootstrap':['bootstrap','563D7C','white','bootstrap'],
+    'MySQL':['mysql','4479A1','white','mysql'],'MongoDB':['mongodb','4EA94B','white','mongodb'],
+    'PostgreSQL':['postgresql','316192','white','postgresql'],'Redis':['redis','DD0031','white','redis'],
+    'Firebase':['firebase','039BE5','white','firebase'],'Supabase':['supabase','3ECF8E','white','supabase'],
+    'Docker':['docker','0DB7ED','white','docker'],'Kubernetes':['kubernetes','326CE5','white','kubernetes'],
+    'Git':['git','F05033','white','git'],'GitHub Actions':['github%20actions','2671E5','white','githubactions'],
+    'AWS':['aws','FF9900','white','amazonaws'],'GCP':['google%20cloud','4285F4','white','googlecloud'],
+    'Jupyter':['jupyter','F37626','white','jupyter'],'VS Code':['visual%20studio%20code','0078D4','white','visualstudiocode'],
+    'Figma':['figma','F24E1E','white','figma'],'Linux':['linux','FCC624','black','linux'],
+  };
+  const d = map[name]; const bs = style||'flat-square';
+  if (!d) return `![${name}](https://img.shields.io/badge/${encodeURIComponent(name)}-555555?style=${bs})`;
+  return `![${d[0]}](https://img.shields.io/badge/${d[0]}-${d[1]}?style=${bs}&logo=${d[3]}&logoColor=${d[2]})`;
+}
+
+function socialBadge(label, url, color, logo) {
+  return `[![${label}](https://img.shields.io/badge/${encodeURIComponent(label)}-${color}?style=for-the-badge&logo=${logo}&logoColor=white)](${url})`;
+}
+
+/* Schedule */
+let genTimer;
+function sched() { clearTimeout(genTimer); genTimer = setTimeout(generate, 350); }
+let currentMd = '';
+
+/* Generate profile README */
+function generate() {
+  const name        = v('name') || 'Your Name';
+  const username    = v('username') || 'username';
+  const role        = v('role');
+  const location    = v('location');
+  const email       = v('email');
+  const greetType   = v('greeting');
+  const bio         = v('bio');
+  const learning    = v('learning');
+  const collab      = v('collab');
+  const funfact     = v('funfact');
+  const askme       = v('askme');
+  const portfolio   = v('portfolio');
+  const linkedin    = v('linkedin');
+  const twitter     = v('twitter');
+  const instagram   = v('instagram');
+  const youtube     = v('youtube');
+  const devto       = v('devto');
+  const medium      = v('medium');
+  const bmc         = v('bmc');
+  const leetcode    = v('leetcode');
+  const kaggle      = v('kaggle');
+  const statsTheme  = v('stats-theme') || 'radical';
+  const statsLayout = v('stats-layout') || 'side';
+  const alignment   = v('alignment') || 'center';
+  const divider     = v('divider') || 'wave';
+  const badgeSt     = v('badge-style') || 'flat-square';
+  const typingTexts = v('typing-texts') || 'Developer,Problem Solver,Open Source Contributor';
+  const hStyle      = headerStyle();
+  const statsOn = activeStats();
+  const optsOn  = activeOpts();
+  const langs   = activeSkills('sk-langs');
+  const frames  = activeSkills('sk-frames');
+  const tools   = activeSkills('sk-tools');
+  const isCenter = alignment === 'center';
+  const wrapOpen = isCenter ? '<div align="center">\n\n' : '';
+
+  let md = '';
+  let greetLine = '';
+  if (greetType === 'wave')          greetLine = `# 👋 Hey there! I'm ${name}`;
+  else if (greetType === 'terminal') greetLine = `# // Hello World! I'm ${name}`;
+  else if (greetType === 'bold')     greetLine = `# 🚀 I'm ${name}`;
+  else if (greetType === 'emoji')    greetLine = `# ✨ Hi, I'm ${name} ✨`;
+  else                               greetLine = `# ${v('custom-greeting') || `Hi, I'm ${name}`}`;
+
+  if (hStyle === 'banner') {
+    md += `${wrapOpen}![Header](https://capsule-render.vercel.app/api?type=waving&color=gradient&customColorList=6,11,20&height=200&section=header&text=${encodeURIComponent(name)}&fontSize=50&fontColor=fff&animation=twinkling&fontAlignY=35&desc=${encodeURIComponent(role||'Developer')}&descAlignY=55&descAlign=50)\n\n`;
+    md += greetLine + '\n\n';
+  } else if (hStyle === 'animated') {
+    md += `${wrapOpen}![Header](https://capsule-render.vercel.app/api?type=venom&color=gradient&customColorList=2&height=200&section=header&text=${encodeURIComponent(name)}&fontSize=50&fontColor=fff&animation=fadeIn)\n\n`;
+    md += greetLine + '\n\n';
+  } else {
+    md += wrapOpen + greetLine + '\n\n';
+  }
+
+  if (role) md += `### ${role}\n\n`;
+  if (location || email) {
+    if (location) md += `📍 **${location}**`;
+    if (location && email) md += `  &nbsp;|&nbsp;  `;
+    if (email) md += `📧 **${email}**`;
+    md += '\n\n';
+  }
+  if (optsOn.includes('typing') && typingTexts) {
+    const typeStr = typingTexts.split(',').map(t => t.trim()).join(';');
+    md += `[![Typing SVG](https://readme-typing-svg.herokuapp.com?font=Fira+Code&pause=1000&color=FF6B9D&center=${isCenter}&vCenter=true&width=435&lines=${encodeURIComponent(typeStr)})](https://git.io/typing-svg)\n\n`;
+  }
+  if (optsOn.includes('visitors')) {
+    md += `![Profile Views](https://komarev.com/ghpvc/?username=${username}&label=Profile+Views&color=FF6B9D&style=flat)\n\n`;
+  }
+  if (isCenter) md += '</div>\n\n';
+
+  const DIV = {
+    wave:'\n![Wave](https://raw.githubusercontent.com/trinib/trinib/82213791fa9ff58d3ca768ddd6de2489ec23ffca/images/footer.svg)\n\n',
+    line:'\n---\n\n',dots:'\n<p align="center">• • • • • • • • • •</p>\n\n',none:'\n'
+  };
+  const div = DIV[divider] || '\n---\n\n';
+
+  if (bio||learning||collab||funfact||askme||portfolio) {
+    md += `## 🙋‍♂️ About Me\n\n`;
+    if (bio)       md += `${bio}\n\n`;
+    if (learning)  md += `- 🌱 **Currently Learning:** ${learning}\n`;
+    if (collab)    md += `- 👯 **Looking to collaborate on:** ${collab}\n`;
+    if (askme)     md += `- 💬 **Ask me about:** ${askme}\n`;
+    if (funfact)   md += `- ⚡ **Fun fact:** ${funfact}\n`;
+    if (portfolio) md += `- 🌐 **Portfolio:** [${portfolio}](${portfolio})\n`;
+    md += '\n' + div;
+  }
+
+  const allSkills = [...langs,...frames,...tools];
+  if (allSkills.length) {
+    md += `## 🛠️ Tech Stack & Tools\n\n`;
+    if (langs.length)  { md += `**Languages:**  \n`; md += langs.map(s=>skillBadge(s,badgeSt)).join(' ')+'\n\n'; }
+    if (frames.length) { md += `**Frameworks & Libraries:**  \n`; md += frames.map(s=>skillBadge(s,badgeSt)).join(' ')+'\n\n'; }
+    if (tools.length)  { md += `**Databases & DevOps:**  \n`; md += tools.map(s=>skillBadge(s,badgeSt)).join(' ')+'\n\n'; }
+    md += div;
+  }
+
+  if (statsOn.length) {
+    md += `## 📊 GitHub Stats\n\n`;
+    if (statsLayout === 'side') {
+      md += `<div align="center">\n\n`;
+      if (statsOn.includes('stats'))  md += `![${name}'s GitHub Stats](https://github-readme-stats.vercel.app/api?username=${username}&show_icons=true&theme=${statsTheme}&hide_border=true&count_private=true)\n`;
+      if (statsOn.includes('streak')) md += `![GitHub Streak](https://github-readme-streak-stats.herokuapp.com/?user=${username}&theme=${statsTheme}&hide_border=true)\n`;
+      md += '\n</div>\n\n';
+    } else {
+      if (statsOn.includes('stats'))  md += `![${name}'s GitHub Stats](https://github-readme-stats.vercel.app/api?username=${username}&show_icons=true&theme=${statsTheme}&hide_border=true&count_private=true)\n\n`;
+      if (statsOn.includes('streak')) md += `![GitHub Streak](https://github-readme-streak-stats.herokuapp.com/?user=${username}&theme=${statsTheme}&hide_border=true)\n\n`;
+    }
+    if (statsOn.includes('langs'))    md += `<div align="center">\n\n![Top Languages](https://github-readme-stats.vercel.app/api/top-langs/?username=${username}&layout=compact&theme=${statsTheme}&hide_border=true&langs_count=8)\n\n</div>\n\n`;
+    if (statsOn.includes('trophies')) md += `<div align="center">\n\n![Trophies](https://github-profile-trophy.vercel.app/?username=${username}&theme=${statsTheme}&no-frame=true&no-bg=false&margin-w=4)\n\n</div>\n\n`;
+    if (statsOn.includes('activity')) md += `![Activity Graph](https://github-readme-activity-graph.vercel.app/graph?username=${username}&theme=react-dark&hide_border=true)\n\n`;
+    if (statsOn.includes('snake'))    md += `<div align="center">\n\n![Snake animation](https://raw.githubusercontent.com/${username}/${username}/output/github-contribution-grid-snake-dark.svg)\n\n</div>\n\n`;
+    md += div;
+  }
+
+  if (lists.proj.length) {
+    md += `## 🚀 Featured Projects\n\n`;
+    lists.proj.forEach(p => {
+      const parts = p.split('—').map(x=>x.trim());
+      md += `### [${parts[0]}](https://github.com/${username}/${parts[0].toLowerCase().replace(/\s+/g,'-')})\n`;
+      if (parts[1]) md += `> ${parts[1]}\n`;
+      md += '\n';
+    });
+    md += div;
+  }
+
+  if (lists.cert.length) {
+    md += `## 🏆 Certifications\n\n`;
+    lists.cert.forEach(c => { md += `- 📜 ${c}\n`; });
+    md += '\n' + div;
+  }
+
+  const socials = [
+    linkedin  && socialBadge('LinkedIn',  linkedin,  '0077B5','linkedin'),
+    twitter   && socialBadge('Twitter',   twitter,   '1DA1F2','twitter'),
+    instagram && socialBadge('Instagram', instagram, 'E4405F','instagram'),
+    youtube   && socialBadge('YouTube',   youtube,   'FF0000','youtube'),
+    devto     && socialBadge('Dev.to',    devto,     '0A0A0A','devdotto'),
+    medium    && socialBadge('Medium',    medium,    '12100E','medium'),
+    leetcode  && socialBadge('LeetCode',  leetcode,  'FFA116','leetcode'),
+    kaggle    && socialBadge('Kaggle',    kaggle,    '20BEFF','kaggle'),
+    bmc       && `[![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-FFDD00?style=for-the-badge&logo=buy-me-a-coffee&logoColor=black)](${bmc})`,
+    portfolio && `[![Portfolio](https://img.shields.io/badge/Portfolio-FF6B9D?style=for-the-badge&logo=google-chrome&logoColor=white)](${portfolio})`,
+  ].filter(Boolean);
+
+  if (socials.length && optsOn.includes('connect')) {
+    md += `## 🤝 Connect With Me\n\n<div align="center">\n\n`;
+    md += socials.join('\n') + '\n\n</div>\n\n' + div;
+  }
+
+  if (optsOn.includes('quote'))  md += `## 💬 Quote of the Day\n\n<div align="center">\n\n![Readme Quotes](https://quotes-github-readme.vercel.app/api?type=horizontal&theme=radical)\n\n</div>\n\n${div}`;
+  if (optsOn.includes('waka'))   md += `## ⏱ WakaTime Stats\n\n[![WakaTime](https://github-readme-stats.vercel.app/api/wakatime?username=${username}&theme=${statsTheme}&hide_border=true)](https://wakatime.com/@${username})\n\n${div}`;
+
+  md += `<div align="center">\n\n⭐ **If you find my work interesting, consider giving it a star!** ⭐\n\n`;
+  if (hStyle === 'banner' || hStyle === 'animated') {
+    md += `![Footer](https://capsule-render.vercel.app/api?type=waving&color=gradient&customColorList=6,11,20&height=100&section=footer)\n\n`;
+  }
+  md += `</div>\n`;
+
+  currentMd = md;
+  document.getElementById('raw-textarea').value = md;
+  renderPreview(md);
+}
+
+/* Preview renderer */
+function renderPreview(md) {
+  let html = md
+    .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img src="$2" alt="$1" style="max-width:100%;vertical-align:middle;margin:2px">')
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>')
+    .replace(/^### (.+)$/gm, '<h3>$1</h3>').replace(/^## (.+)$/gm,'<h2>$1</h2>').replace(/^# (.+)$/gm,'<h1>$1</h1>')
+    .replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>').replace(/\*([^*]+)\*/g,'<em>$1</em>')
+    .replace(/```[\w]*\n([\s\S]*?)```/g,'<pre><code>$1</code></pre>').replace(/`([^`]+)`/g,'<code>$1</code>')
+    .replace(/^> (.+)$/gm,'<blockquote>$1</blockquote>')
+    .replace(/^- (.+)$/gm,'<li>$1</li>')
+    .replace(/(<li>.*<\/li>(\n|$))+/g, m => `<ul>${m}</ul>`)
+    .replace(/\n\n+/g,'</p><p>').replace(/^/,'<p>').replace(/$/,'</p>');
+  document.getElementById('preview-render').innerHTML = html;
+}
+
+function copyMd() {
+  if (!currentMd) { showToast('Generate first!', 'err'); return; }
+  navigator.clipboard.writeText(currentMd).then(() => showToast('Copied to clipboard!'));
+}
+
+function downloadMd() {
+  if (!currentMd) { showToast('Generate first!', 'err'); return; }
+  const blob = new Blob([currentMd], {type:'text/markdown'});
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+  a.download = 'README.md'; a.click();
+  showToast('Downloaded README.md');
+}
+
+/* ═══════════════════════════════════════
+   ████  PROJECT GENERATOR JS  ████
+═══════════════════════════════════════ */
+
+/* Tech tags */
+document.querySelectorAll('.tech-tag').forEach(tag => {
+  tag.addEventListener('click', () => tag.classList.toggle('selected'));
+});
+
+/* Section checkboxes */
+document.querySelectorAll('.sec-check').forEach(item => {
+  item.addEventListener('click', () => {
+    item.classList.toggle('on');
+    const box = item.querySelector('.chkbox');
+    box.innerHTML = item.classList.contains('on') ? '<i class="ri-check-line"></i>' : '';
+  });
+});
+
+/* View switch */
+let projView = 'preview';
+let generatedMD = '';
+
+function switchView(view) {
+  projView = view;
+  document.getElementById('md-preview-proj').classList.toggle('show', view === 'preview');
+  document.getElementById('raw-code-proj').classList.toggle('show', view === 'raw');
+  document.getElementById('btn-preview').classList.toggle('active', view === 'preview');
+  document.getElementById('btn-raw').classList.toggle('active', view === 'raw');
+}
+
+function copyREADME() {
+  if (!generatedMD) { showToast('Nothing to copy yet!', 'err'); return; }
+  navigator.clipboard.writeText(generatedMD).then(() => showToast('Copied to clipboard!'));
+}
+
+function downloadREADME() {
+  if (!generatedMD) { showToast('Nothing to download yet!', 'err'); return; }
+  const name = (document.getElementById('p-name').value || 'README').replace(/\s+/g, '-');
+  const blob = new Blob([generatedMD], { type: 'text/markdown' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = `${name}-README.md`;
+  a.click(); URL.revokeObjectURL(url);
+  showToast('Downloaded README.md!');
+}
+
+/* Markdown → HTML renderer */
+function renderMarkdown(md) {
+  let html = md
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/```(\w*)\n([\s\S]*?)```/g, (_,lang,code) => `<pre><code>${code.trim()}</code></pre>`)
+    .replace(/`([^`]+)`/g,'<code>$1</code>')
+    .replace(/^### (.+)$/gm,'<h3>$1</h3>').replace(/^## (.+)$/gm,'<h2>$1</h2>').replace(/^# (.+)$/gm,'<h1>$1</h1>')
+    .replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>').replace(/\*(.+?)\*/g,'<em>$1</em>')
+    .replace(/^---$/gm,'<hr>')
+    .replace(/\[!\[([^\]]*)\]\(([^)]+)\)\]\(([^)]+)\)/g,'<a href="$3" target="_blank"><img src="$2" alt="$1"></a>')
+    .replace(/!\[([^\]]*)\]\(([^)]+)\)/g,'<img src="$2" alt="$1">')
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g,'<a href="$2" target="_blank">$1</a>')
+    .replace(/^> (.+)$/gm,'<blockquote>$1</blockquote>')
+    .replace(/^[-*] (.+)$/gm,'<li>$1</li>').replace(/^\d+\. (.+)$/gm,'<li>$1</li>')
+    .replace(/(<li>.*<\/li>\n?)+/g, m => `<ul>${m}</ul>`)
+    .split('\n\n').map(block => {
+      if (/^<(h[1-6]|ul|ol|pre|table|hr|blockquote)/.test(block.trim())) return block;
+      if (!block.trim()) return '';
+      return `<p>${block.replace(/\n/g,'<br>')}</p>`;
+    }).join('\n');
+  return html;
+}
+
+/* Toggle API key visibility */
+
+
+/* Generate project README via Gemini API */
+async function generateREADME() {
+  const name       = document.getElementById('p-name').value.trim();
+  const desc       = document.getElementById('p-desc').value.trim();
+  const type       = document.getElementById('p-type').value;
+  const demo       = document.getElementById('p-demo').value.trim();
+  const github     = document.getElementById('p-github').value.trim();
+  const features   = document.getElementById('p-features').value.trim();
+  const usage      = document.getElementById('p-usage').value.trim();
+  const tone       = document.getElementById('p-tone').value;
+  const customTech = document.getElementById('p-custom-tech').value.trim();
+  if (!name || !desc || !type) {
+    showToast('Fill in Name, Description & Type!', 'err'); return;
+  }
+
+  const selectedTags = [...document.querySelectorAll('.tech-tag.selected')].map(t => t.dataset.val);
+  const customTechs  = customTech ? customTech.split(',').map(s => s.trim()).filter(Boolean) : [];
+  const allTech      = [...selectedTags, ...customTechs];
+  const sections     = [...document.querySelectorAll('.sec-check.on')].map(i => i.dataset.section);
+
+  const toneMap = {
+    professional: 'professional, clean, corporate-style',
+    fun:          'fun, energetic, emoji-heavy, slightly casual but polished — like a cool developer portfolio',
+    minimal:      'minimal, no-nonsense, very technical, concise',
+    detailed:     'detailed and comprehensive, explaining everything thoroughly'
+  };
+
+  const prompt = `Generate a complete, high-quality GitHub README.md file in Markdown format.
+
+PROJECT DETAILS:
+- Name: ${name}
+- Description: ${desc}
+- Type: ${type}
+- Live Demo: ${demo || 'not provided'}
+- GitHub: ${github || 'not provided'}
+- Tech Stack: ${allTech.length ? allTech.join(', ') : 'not specified'}
+- Key Features: ${features || 'not provided'}
+- How to Use: ${usage || 'not provided'}
+
+SECTIONS TO INCLUDE: ${sections.join(', ')}
+
+AUTHOR INFO (include if author section requested):
+- Name: Anurag Rajput
+- Role: B.Tech Data Science Student @ Dev Bhoomi Uttarakhand University (DBUU)
+- Portfolio: https://instai4.github.io/PORT-FOLIO/
+- LinkedIn: https://www.linkedin.com/in/anurag-singh-43230a380/
+- GitHub: https://github.com/instai4
+
+TONE: Write in a ${toneMap[tone]} style.
+
+REQUIREMENTS:
+- Use proper Markdown with shields.io badges at the top for tech stack
+- Include a clear project description section
+- Use emojis appropriately for section headers
+- Make it GitHub-ready and professional
+- End with a centered "Built with ❤️" footer line
+- Return ONLY the raw Markdown, no explanation, no preamble, no code fences wrapping the whole output`;
+
+  const btn = document.getElementById('proj-gen-btn');
+  btn.disabled = true;
+  btn.classList.add('loading');
+  document.getElementById('progress-bar').style.width = '12%';
+
+  const outBox = document.getElementById('out-box');
+  const rawEl  = document.getElementById('raw-code-proj');
+  const prevEl = document.getElementById('md-preview-proj');
+
+  outBox.classList.add('streaming');
+  rawEl.textContent = '';
+  prevEl.innerHTML  = '';
+  rawEl.classList.add('show');
+  prevEl.classList.remove('show');
+  document.getElementById('btn-raw').classList.add('active');
+  document.getElementById('btn-preview').classList.remove('active');
+  projView    = 'raw';
+  generatedMD = '';
+
+  // Models to try in order
+  const MODEL_FALLBACKS = [
+    document.getElementById('p-model').value,
+    'gemini-2.5-flash',
+    'gemini-2.5-flash-lite',
+    'gemini-2.5-pro',
+  ].filter((v,i,a) => a.indexOf(v) === i); // dedupe
+
+  let lastError = '';
+
+  for (const model of MODEL_FALLBACKS) {
+    rawEl.textContent = `⏳ Trying model: ${model}...`;
+    document.getElementById('progress-bar').style.width = '20%';
+
+    try {
+      // Try streaming first, fall back to non-streaming
+      const streamEndpoint = `/api/gemini?model=${model}&stream=true`;
+      const plainEndpoint  = `/api/gemini?model=${model}&stream=false`;
+
+      // ── Attempt streaming ──
+      let streamOk = false;
+      try {
+        const sRes = await fetch(streamEndpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ prompt })
+        });
+
+        if (!sRes.ok) {
+          const e = await sRes.json().catch(() => ({}));
+          throw new Error(e?.error?.message || `HTTP ${sRes.status}`);
+        }
+
+        const reader  = sRes.body.getReader();
+        const decoder = new TextDecoder();
+        let   buf     = '';
+        generatedMD   = '';
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buf += decoder.decode(value, { stream: true });
+          const lines = buf.split('\n');
+          buf = lines.pop();
+          for (const line of lines) {
+            const t = line.trim();
+            if (!t.startsWith('data:')) continue;
+            const js = t.slice(5).trim();
+            if (!js || js === '[DONE]') continue;
+            try {
+              const p = JSON.parse(js);
+              const chunk = p?.candidates?.[0]?.content?.parts?.[0]?.text;
+              if (chunk) {
+                generatedMD += chunk;
+                rawEl.textContent = generatedMD;
+                outBox.scrollTop  = outBox.scrollHeight;
+                document.getElementById('progress-bar').style.width =
+                  Math.min(90, parseFloat(document.getElementById('progress-bar').style.width||'20') + 1) + '%';
+              }
+            } catch {}
+          }
+        }
+        streamOk = true;
+      } catch (streamErr) {
+        // streaming failed — try plain generateContent
+        const pRes = await fetch(plainEndpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ prompt })
+        });
+
+        if (!pRes.ok) {
+          const e = await pRes.json().catch(() => ({}));
+          throw new Error(e?.error?.message || `HTTP ${pRes.status}`);
+        }
+
+        const data  = await pRes.json();
+        generatedMD = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+        if (!generatedMD) throw new Error('Empty response from model');
+        rawEl.textContent = generatedMD;
+      }
+
+      // ── Success ──
+      // Strip accidental outer fences
+      generatedMD = generatedMD.replace(/^```(?:markdown)?\n([\s\S]*?)```\s*$/m, '$1').trim();
+      rawEl.textContent = generatedMD;
+
+      outBox.classList.remove('streaming');
+      document.getElementById('progress-bar').style.width = '100%';
+      setTimeout(() => { document.getElementById('progress-bar').style.width = '0%'; }, 600);
+
+      prevEl.innerHTML = renderMarkdown(generatedMD);
+      switchView('preview');
+      showToast(`✅ Done! (${model})`);
+
+      // Update the selector to remember what worked
+      const sel = document.getElementById('p-model');
+      for (let o of sel.options) { if (o.value === model) { o.selected = true; break; } }
+
+      break; // exit the model-retry loop
+
+    } catch (err) {
+      lastError = err.message || 'Unknown error';
+      console.warn(`Model ${model} failed:`, lastError);
+      // continue to next model in fallback list
+    }
+  }
+
+  // If we get here with no content, all models failed
+  if (!generatedMD) {
+    outBox.classList.remove('streaming');
+    rawEl.textContent = `❌ All models failed.\n\nLast error:\n${lastError}\n\nTry:\n• Wait 1 min and retry (rate limit)\n• Get a new key at https://aistudio.google.com/apikey\n• Enable billing at console.cloud.google.com`;
+    rawEl.classList.add('show');
+    switchView('raw');
+    showToast('All models failed!', 'err');
+    document.getElementById('progress-bar').style.width = '0%';
+  }
+
+  btn.disabled = false;
+  btn.classList.remove('loading');
+}
+
+/* Init profile generator on load */
+generate();
